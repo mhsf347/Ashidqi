@@ -35,4 +35,4 @@ Jika aplikasi ini bermanfaat, Anda dapat mendukung pengembangan fitur selanjutny
 [Trakteer.id/mhsf/tip](https://trakteer.id/mhsf/tip)
 
 ---
-© 2026 Ashidqi Team
+© 2026 MHSF
