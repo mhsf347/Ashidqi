@@ -953,6 +953,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'label': 'Masjid',
         'route': '/mosque-map',
       },
+      {'icon': Icons.event_available_outlined, 'label': 'Puasa', 'route': '/fasting'},
       {'icon': Icons.auto_stories_outlined, 'label': 'Doa', 'route': '/doa'},
       {'icon': Icons.calculate_outlined, 'label': 'Zakat', 'route': '/zakat'},
       {'icon': Icons.checklist_outlined, 'label': 'Jurnal', 'route': '/journal'},
@@ -1052,7 +1053,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: 16),
         SizedBox(
-          height: 180,
+          height: 210,
           child: ListView(
             scrollDirection: Axis.horizontal,
             clipBehavior: Clip.none,
@@ -1110,14 +1111,17 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
 
               if (_fastingInfo != null) ...[
-                _buildHighlightCard(
-                  context,
-                  isDark: isDark,
-                  title: _fastingInfo!['title'],
-                  subtitle: 'Jadwal Puasa',
-                  content: _fastingInfo!['subtitle'],
-                  icon: Icons.event,
-                  color: const Color(0xFF2980B9),
+                GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, '/fasting'),
+                  child: _buildHighlightCard(
+                    context,
+                    isDark: isDark,
+                    title: _fastingInfo!['title'],
+                    subtitle: 'Jadwal Puasa',
+                    content: _fastingInfo!['subtitle'],
+                    icon: Icons.event,
+                    color: const Color(0xFF2980B9),
+                  ),
                 ),
                 const SizedBox(width: 16),
               ],
@@ -1234,7 +1238,53 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  static const List<Map<String, String>> _dailyQuotes = [
+    {
+      'content': '"Maka sesungguhnya bersama kesulitan ada kemudahan."',
+      'source': 'QS. Al-Insyirah: 5'
+    },
+    {
+      'content': '"Dan bersabarlah, sesungguhnya Allah beserta orang-orang yang sabar."',
+      'source': 'QS. Al-Anfal: 46'
+    },
+    {
+      'content': '"Allah tidak membebani seseorang melainkan sesuai dengan kesanggupannya."',
+      'source': 'QS. Al-Baqarah: 286'
+    },
+    {
+      'content': '"Dan barangsiapa yang bertawakal kepada Allah, niscaya Allah akan mencukupkan (keperluan)nya."',
+      'source': 'QS. At-Talaq: 3'
+    },
+    {
+      'content': '"Sesungguhnya Allah tidak merubah keadaan suatu kaum sehingga mereka merubah keadaan yang ada pada diri mereka sendiri."',
+      'source': 'QS. Ar-Ra\'d: 11'
+    },
+    {
+      'content': '"Maka nikmat Tuhan kamu yang manakah yang kamu dustakan?"',
+      'source': 'QS. Ar-Rahman: 13'
+    },
+    {
+      'content': '"Barangsiapa bertakwa kepada Allah niscaya Dia akan membukakan jalan keluar baginya."',
+      'source': 'QS. At-Talaq: 2'
+    },
+    {
+      'content': '"Cukuplah Allah menjadi Penolong kami dan Allah adalah sebaik-baik Pelindung."',
+      'source': 'QS. Ali \'Imran: 173'
+    },
+    {
+      'content': '"Dan Tuhanmu berfirman: Berdoalah kepada-Ku, niscaya akan Kuperkenankan bagimu."',
+      'source': 'QS. Ghafir: 60'
+    },
+    {
+      'content': '"Sesungguhnya bersama kesulitan ada kemudahan."',
+      'source': 'QS. Al-Insyirah: 6'
+    }
+  ];
+
   Widget _buildQuoteCard(BuildContext context, bool isDark) {
+    // Select quote based on current day of the year or month so it changes daily
+    final quote = _dailyQuotes[DateTime.now().day % _dailyQuotes.length];
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1255,7 +1305,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Icon(Icons.format_quote, color: AppColors.primary, size: 32),
           const SizedBox(height: 8),
           Text(
-            '"Maka sesungguhnya bersama kesulitan ada kemudahan."',
+            quote['content']!,
             style: TextStyle(
               color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
               fontSize: 17,
@@ -1265,7 +1315,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'QS. Al-Insyirah: 5',
+            quote['source']!,
             style: TextStyle(
               color: AppColors.primary,
               fontSize: 14,

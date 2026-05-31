@@ -23,25 +23,26 @@ class _FastingCalendarScreenState extends State<FastingCalendarScreen> {
   DateTime _selectedDate = DateTime.now();
 
   // API Data
-  Map<int, Map<String, dynamic>>? _hijriData; // day -> hijri info
-  bool _isLoading = false;
+  Map<String, Map<String, dynamic>>? _hijriData;
+  bool _isLoading = true;
+  final Set<String> _scheduledReminders = {};
   String _hijriMonthName = '';
-
-  // Reminders
-  Set<String> _scheduledReminders = {};
 
   @override
   void initState() {
     super.initState();
-    HijriCalendar.setLocal('id'); // Fallback locale
-    _fetchHijriCalendar(_currentMonth.month, _currentMonth.year);
+    try {
+      HijriCalendar.setLocal('en');
+    } catch (_) {}
     _loadReminders();
+    _fetchHijriCalendar(_selectedDate.month, _selectedDate.year);
   }
 
   Future<void> _loadReminders() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _scheduledReminders = (prefs.getStringList('fasting_reminders') ?? []).toSet();
+      _scheduledReminders
+          .addAll(prefs.getStringList('fasting_reminders') ?? []);
     });
   }
 
@@ -84,7 +85,7 @@ class _FastingCalendarScreenState extends State<FastingCalendarScreen> {
     try {
       // Try API first
       final url = Uri.parse(
-        'http://api.aladhan.com/v1/gToHCalendar/$month/$year',
+        'https://api.aladhan.com/v1/gToHCalendar/$month/$year',
       );
       final response = await http.get(url).timeout(const Duration(seconds: 5));
 
@@ -120,20 +121,27 @@ class _FastingCalendarScreenState extends State<FastingCalendarScreen> {
 
   void _parseHijriData(Map<String, dynamic> data) {
     final days = data['data'] as List;
-    final Map<int, Map<String, dynamic>> result = {};
+    final Map<String, Map<String, dynamic>> result = {};
 
     for (var dayData in days) {
       final gregorian = dayData['gregorian'];
       final hijri = dayData['hijri'];
       // Handle both string and int values from API
       final gDay = gregorian['day'];
+      final gMonth = gregorian['month']['number'];
+      final gYear = gregorian['year'];
+      
       final day = gDay is int ? gDay : int.parse(gDay.toString());
+      final month = gMonth is int ? gMonth : int.parse(gMonth.toString());
+      final year = gYear is int ? gYear : int.parse(gYear.toString());
 
       final hDay = hijri['day'];
       final hMonth = hijri['month']['number'];
       final hYear = hijri['year'];
 
-      result[day] = {
+      final dateKey = '$year-$month-$day';
+
+      result[dateKey] = {
         'hDay': hDay is int ? hDay : int.parse(hDay.toString()),
         'hMonth': hMonth is int ? hMonth : int.parse(hMonth.toString()),
         'hMonthName': hijri['month']['en'] ?? '-',
@@ -145,7 +153,7 @@ class _FastingCalendarScreenState extends State<FastingCalendarScreen> {
 
     // Get the hijri month name from the middle of the month
     if (result.isNotEmpty) {
-      final midDay = result[15] ?? result.values.first;
+      final midDay = result.length > 14 ? result.values.toList()[14] : result.values.first;
       _hijriMonthName = '${midDay['hMonthName']} ${midDay['hYear']}';
     }
 
@@ -154,8 +162,9 @@ class _FastingCalendarScreenState extends State<FastingCalendarScreen> {
 
   /// Get Hijri info for a specific day (from API or fallback)
   Map<String, dynamic> _getHijriInfo(DateTime date) {
-    if (_hijriData != null && _hijriData!.containsKey(date.day)) {
-      return _hijriData![date.day]!;
+    final dateKey = '${date.year}-${date.month}-${date.day}';
+    if (_hijriData != null && _hijriData!.containsKey(dateKey)) {
+      return _hijriData![dateKey]!;
     }
 
     // Fallback to local package

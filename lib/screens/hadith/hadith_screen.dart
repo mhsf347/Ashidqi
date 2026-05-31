@@ -324,7 +324,7 @@ class _HadithScreenState extends State<HadithScreen> {
 
   Widget _buildNarratorSelector(bool isDark) {
     return Container(
-      height: 50,
+      height: 70,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,

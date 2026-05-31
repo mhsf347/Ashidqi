@@ -113,6 +113,7 @@ class _MosqueMapScreenState extends State<MosqueMapScreen>
     try {
       final response = await http.post(
         Uri.parse('https://overpass-api.de/api/interpreter'),
+        headers: {'User-Agent': 'AshidqiApp/1.0'},
         body: query,
       );
 
@@ -123,8 +124,10 @@ class _MosqueMapScreenState extends State<MosqueMapScreen>
         setState(() {
           _mosques = elements
               .map((e) {
-                final lat = e['lat'] ?? e['center']?['lat'];
-                final lon = e['lon'] ?? e['center']?['lon'];
+                final rawLat = e['lat'] ?? e['center']?['lat'];
+                final rawLon = e['lon'] ?? e['center']?['lon'];
+                final lat = rawLat != null ? (rawLat as num).toDouble() : null;
+                final lon = rawLon != null ? (rawLon as num).toDouble() : null;
                 final tags = e['tags'] ?? {};
 
                 return {
@@ -133,7 +136,9 @@ class _MosqueMapScreenState extends State<MosqueMapScreen>
                   'lat': lat,
                   'lon': lon,
                   'tags': tags,
-                  'distance': _calculateDistance(lat, lon),
+                  'distance': (lat != null && lon != null) 
+                      ? _calculateDistance(lat, lon) 
+                      : 0.0,
                 };
               })
               .where((m) => m['lat'] != null && m['lon'] != null)
