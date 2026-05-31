@@ -39,6 +39,9 @@ File ini ditujukan bagi AI Agent untuk mendapatkan konteks penuh mengenai reposi
 - **Sistem Penyimpanan Audio Lokal**: Diatur melalui `AudioDownloadService` menggunakan `path_provider` dan `http`. Membantu pemutar audio memilih _device file source_ jika sudah terunduh ketimbang memanggil _URL source_ yang menguras data pengguna.
 - **Siklus Hidup `StreamController`**: Menggunakan pola pemanggilan `.close()` pada fungsi `dispose()` di `DatabaseService` untuk menghindari _memory leaks_. Pastikan AI selanjutnya menerapkan pola yang sama jika membuat _stream_ baru.
 - **Manajemen State Kalender Hijriah**: API Aladhan sering kali membutuhkan waktu beberapa detik untuk _fetch_. Caching sudah diterapkan, namun _error handling_ offline (_timeout_) sesekali mengandalkan _fallback_ ke paket lokal `hijri_calendar`. Pertahankan struktur _fallback_ ini.
+- **Dynamic Content & Shortcuts**: Quotes/kutipan harian di _Home Screen_ telah dibuat dinamis (berganti setiap hari sesuai tanggal). Akses cepat ke Kalender Puasa juga telah disematkan melalui menu _Quick Actions_ dan _Banner_ khusus.
+- **UI & Bug Fixes**: Memperbaiki isu rendering seperti _Bottom Overflow_ pada layar Hadis menggunakan `Expanded` dan sinkronisasi _Marker Icon_ pada Peta Masjid menggunakan Widget kustom berbasis warna primer.
+- **Konfigurasi Build Gradle**: Memperbaiki isu _missing keystore_ dengan logika _fallback_ otomatis ke _debug signing config_ bila `key.properties` tidak ditemukan saat melakukan build _release_.
 
 ## 5. Arahan untuk Fitur Masa Depan
 Jika User meminta untuk menambahkan fitur baru:
