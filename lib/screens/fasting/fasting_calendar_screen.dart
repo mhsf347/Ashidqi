@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
@@ -6,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../core/theme/app_colors.dart';
+import '../../services/notification_service.dart';
 
 /// Fasting Calendar Screen - Using Aladhan API for Hijri Calendar
 /// Features: Calendar grid, Sunnah fasting highlights, stats, schedule list
@@ -25,11 +27,51 @@ class _FastingCalendarScreenState extends State<FastingCalendarScreen> {
   bool _isLoading = false;
   String _hijriMonthName = '';
 
+  // Reminders
+  Set<String> _scheduledReminders = {};
+
   @override
   void initState() {
     super.initState();
     HijriCalendar.setLocal('id'); // Fallback locale
     _fetchHijriCalendar(_currentMonth.month, _currentMonth.year);
+    _loadReminders();
+  }
+
+  Future<void> _loadReminders() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _scheduledReminders = (prefs.getStringList('fasting_reminders') ?? []).toSet();
+    });
+  }
+
+  Future<void> _toggleReminder(DateTime date, String fastingName) async {
+    final prefs = await SharedPreferences.getInstance();
+    final dateKey = '${date.year}-${date.month}-${date.day}';
+    final id = int.parse('${date.year}${date.month}${date.day}');
+
+    setState(() {
+      if (_scheduledReminders.contains(dateKey)) {
+        _scheduledReminders.remove(dateKey);
+        NotificationService().cancelNotification(id);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pengingat puasa dibatalkan')),
+        );
+      } else {
+        _scheduledReminders.add(dateKey);
+        NotificationService().scheduleFastingReminder(
+          id: id,
+          title: 'Pengingat Puasa Besok',
+          body: 'Jangan lupa sahur untuk $fastingName besok',
+          scheduledTime: date,
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pengingat puasa berhasil diatur')),
+        );
+      }
+    });
+
+    await prefs.setStringList('fasting_reminders', _scheduledReminders.toList());
   }
 
   /// Fetch Hijri calendar data from Aladhan API
@@ -587,6 +629,8 @@ class _FastingCalendarScreenState extends State<FastingCalendarScreen> {
       children: upcoming.map((date) {
         final fastingName = _getFastingName(date);
         final dateStr = DateFormat("EEEE, d MMM", "id_ID").format(date);
+        final dateKey = '${date.year}-${date.month}-${date.day}';
+        final isScheduled = _scheduledReminders.contains(dateKey);
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -618,7 +662,13 @@ class _FastingCalendarScreenState extends State<FastingCalendarScreen> {
                   ],
                 ),
               ),
-              const Icon(Icons.notifications_none, color: Colors.grey),
+              IconButton(
+                onPressed: () => _toggleReminder(date, fastingName),
+                icon: Icon(
+                  isScheduled ? Icons.notifications_active : Icons.notifications_none,
+                  color: isScheduled ? AppColors.primary : Colors.grey,
+                ),
+              ),
             ],
           ),
         );

@@ -13,6 +13,7 @@ class PrayerSettingsProvider extends ChangeNotifier {
   String _manualCity = 'Jakarta';
   String _manualCountry = 'Indonesia';
   bool _useGPS = true;
+  bool _tahajudEnabled = false;
 
   // Offsets (Tunes)
   final Map<String, int> _offsets = {
@@ -60,6 +61,7 @@ class PrayerSettingsProvider extends ChangeNotifier {
   String get manualCity => _manualCity;
   String get manualCountry => _manualCountry;
   bool get useGPS => _useGPS;
+  bool get tahajudEnabled => _tahajudEnabled;
 
   Map<String, int> get offsets => _offsets;
   Map<String, bool> get adzanEnabled => _adzanEnabled;
@@ -79,6 +81,7 @@ class PrayerSettingsProvider extends ChangeNotifier {
     _manualCountry = prefs.getString('manual_country') ?? 'Indonesia';
     _useGPS = prefs.getBool('use_gps') ?? true;
     _selectedMuadzin = prefs.getString('selected_muadzin') ?? 'makkah';
+    _tahajudEnabled = prefs.getBool('tahajud_enabled') ?? false;
 
     // Load Maps
     for (var p in ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya']) {
@@ -193,58 +196,86 @@ class PrayerSettingsProvider extends ChangeNotifier {
     _scheduleNotifications();
   }
 
+  Future<void> updateTahajudEnabled(bool enabled) async {
+    _tahajudEnabled = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('tahajud_enabled', enabled);
+    notifyListeners();
+    _scheduleNotifications();
+  }
+
   Future<void> _scheduleNotifications() async {
     if (_prayerTimes == null) return;
 
     final service = NotificationService();
     await service.cancelAllNotifications();
 
-    final prayers = _prayerTimes!.allPrayers;
     int id = 0;
+    final now = DateTime.now();
 
-    for (var p in prayers) {
-      final name = p['name']!; // Subuh, Dzuhur...
-      final timeStr = p['time']!;
+    // Schedule for the next 7 days to survive deep sleep
+    for (int dayOffset = 0; dayOffset < 7; dayOffset++) {
+      final targetDate = now.add(Duration(days: dayOffset));
+      
+      // We assume prayer times don't drift more than a minute or two over a week,
+      // but for absolute precision, we should ideally fetch from PrayerTimesService for each day.
+      // Since this is a local fallback, using the current day's times as a base and applying offset is acceptable.
+      // However, to be 100% accurate, the background task will refresh this daily anyway.
+      final prayers = _prayerTimes!.allPrayers;
 
-      if (_adzanEnabled[name] != true) continue;
+      for (var p in prayers) {
+        final name = p['name']!; // Subuh, Dzuhur...
+        final timeStr = p['time']!;
 
-      final parts = timeStr.split(':');
-      final now = DateTime.now();
-      var scheduledTime = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        int.parse(parts[0]),
-        int.parse(parts[1]),
-      );
+        if (_adzanEnabled[name] != true) continue;
 
-      // Jika waktu sudah lewat hari ini, jangan schedule
-      // Kita tidak schedule besok karena jadwal mungkin geser.
-      // Solusinya: Schedule ulang tiap buka app / jam 12 malam via workmanager (next step).
-      if (scheduledTime.isBefore(now)) continue;
-
-      // 1. Schedules Adzan
-      await service.schedulePrayerNotification(
-        id: id++,
-        title: 'Waktunya $name',
-        body: 'Saatnya menunaikan sholat $name',
-        scheduledTime: scheduledTime,
-        soundName: _selectedMuadzin,
-      );
-
-      // 2. Reminder
-      final reminder = _reminderMinutes[name] ?? 0;
-      if (reminder > 0) {
-        final reminderTime = scheduledTime.subtract(
-          Duration(minutes: reminder.toInt()),
+        final parts = timeStr.split(':');
+        var scheduledTime = DateTime(
+          targetDate.year,
+          targetDate.month,
+          targetDate.day,
+          int.parse(parts[0]),
+          int.parse(parts[1]),
         );
-        if (reminderTime.isAfter(now)) {
-          await service.schedulePrayerNotification(
-            id: id++,
-            title: 'Persiapan $name',
-            body: '$name akan masuk dalam ${reminder.toInt()} menit',
-            scheduledTime: reminderTime,
+
+        if (scheduledTime.isBefore(now)) continue;
+
+        // 1. Schedules Adzan
+        await service.schedulePrayerNotification(
+          id: id++,
+          title: 'Waktunya $name',
+          body: 'Saatnya menunaikan sholat $name',
+          scheduledTime: scheduledTime,
+          soundName: _selectedMuadzin,
+        );
+
+        // 2. Reminder
+        final reminder = _reminderMinutes[name] ?? 0;
+        if (reminder > 0) {
+          final reminderTime = scheduledTime.subtract(
+            Duration(minutes: reminder.toInt()),
           );
+          if (reminderTime.isAfter(now)) {
+            await service.schedulePrayerNotification(
+              id: id++,
+              title: 'Persiapan $name',
+              body: '$name akan masuk dalam ${reminder.toInt()} menit',
+              scheduledTime: reminderTime,
+            );
+          }
+        }
+
+        // 3. Tahajud Reminder (Only for Subuh)
+        if (name == 'Subuh' && _tahajudEnabled) {
+          final tahajudTime = scheduledTime.subtract(const Duration(minutes: 120));
+          if (tahajudTime.isAfter(now)) {
+            await service.schedulePrayerNotification(
+              id: id++,
+              title: 'Waktunya Tahajud',
+              body: 'Mari bangun dan laksanakan Sholat Tahajud',
+              scheduledTime: tahajudTime,
+            );
+          }
         }
       }
     }

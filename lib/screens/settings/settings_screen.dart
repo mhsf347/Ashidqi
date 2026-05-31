@@ -122,6 +122,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Icons.notifications_active_outlined,
             ),
             _buildSettingsCard(context, isDark, [
+              SwitchListTile(
+                title: const Text('Pengingat Sholat Tahajud'),
+                subtitle: const Text('120 menit sebelum waktu Subuh'),
+                secondary: Icon(
+                  Icons.nights_stay_outlined,
+                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                ),
+                value: prayerSettings.tahajudEnabled,
+                onChanged: (val) {
+                  prayerSettings.updateTahajudEnabled(val);
+                },
+                activeThumbColor: AppColors.primary,
+              ),
+              const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.volume_up_outlined),
                 title: const Text('Atur Suara & Notifikasi'),
@@ -137,6 +151,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   );
                 },
+              ),
+            ]),
+
+            const SizedBox(height: 24),
+
+            // FITUR
+            _buildSectionHeader(
+              context,
+              'Fitur',
+              Icons.stars_outlined,
+            ),
+            _buildSettingsCard(context, isDark, [
+              ListTile(
+                leading: const Icon(Icons.calculate_outlined),
+                title: const Text('Kalkulator Zakat'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pushNamed(context, '/zakat'),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.checklist_outlined),
+                title: const Text('Jurnal Ibadah'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pushNamed(context, '/journal'),
               ),
             ]),
 

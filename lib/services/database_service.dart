@@ -28,6 +28,11 @@ class DatabaseService {
 
   DatabaseService._internal();
 
+  /// Dispose resources to prevent memory leaks
+  void dispose() {
+    _progressController.close();
+  }
+
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
@@ -180,7 +185,7 @@ class DatabaseService {
     }
   }
 
-  Future<List<AyahTable>> getAyahsBySurah(int surahNumber) async {
+  Future<List<AyahTable>> getAyahsBySurah(int surahNumber, {int? limit, int? offset}) async {
     final db = await database;
     try {
       final List<Map<String, dynamic>> maps = await db.query(
@@ -188,6 +193,8 @@ class DatabaseService {
         where: 'surahNumber = ?',
         whereArgs: [surahNumber],
         orderBy: 'numberInSurah ASC',
+        limit: limit,
+        offset: offset,
       );
       return List.generate(maps.length, (i) => AyahTable.fromMap(maps[i]));
     } catch (e) {

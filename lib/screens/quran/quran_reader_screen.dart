@@ -11,8 +11,9 @@ import '../../core/theme/app_colors.dart';
 import '../../models/quran_model.dart';
 import '../../models/qari_model.dart';
 import '../../services/quran_service.dart';
-import '../../services/database_service.dart'; // Added
+import '../../services/database_service.dart';
 import '../../services/storage_service.dart';
+import '../../services/audio_download_service.dart';
 
 class QuranReaderScreen extends StatefulWidget {
   final int surahNumber;
@@ -60,6 +61,20 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     _loadQaris();
     _loadBookmarks();
 
+    _itemPositionsListener.itemPositions.addListener(() {
+      final positions = _itemPositionsListener.itemPositions.value;
+      if (positions.isNotEmpty) {
+        final lastVisibleIndex = positions
+            .where((item) => item.itemTrailingEdge <= 1)
+            .map((item) => item.index)
+            .fold(-1, (max, index) => index > max ? index : max);
+
+        if (lastVisibleIndex >= _ayahs.length - 10 && !_isLoadingMore && _hasMore) {
+          _loadMoreAyahs();
+        }
+      }
+    });
+
     _audioPlayer.onPlayerComplete.listen((event) {
       if (_playingVerse != null) {
         if (_isPlayingAll) {
@@ -70,11 +85,30 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
             // Index in list is nextIndex + 1 (because index 0 is Header)
             _scrollToVerse(nextIndex + 1);
           } else {
-            if (mounted) {
-              setState(() {
-                _playingVerse = null;
-                _isPlayingAll = false;
-              });
+            if (_hasMore) {
+               // Load more and play next!
+               _loadMoreAyahs();
+               // Wait for a short duration then try again
+               Future.delayed(const Duration(milliseconds: 500), () {
+                 if (nextIndex < _ayahs.length) {
+                   _playVerse(nextIndex, _ayahs[nextIndex].audio);
+                   _scrollToVerse(nextIndex + 1);
+                 } else {
+                   if (mounted) {
+                     setState(() {
+                       _playingVerse = null;
+                       _isPlayingAll = false;
+                     });
+                   }
+                 }
+               });
+            } else {
+              if (mounted) {
+                setState(() {
+                  _playingVerse = null;
+                  _isPlayingAll = false;
+                });
+              }
             }
           }
         } else {
@@ -193,10 +227,26 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     HapticFeedback.lightImpact();
   }
 
-  Future<void> _fetchSurahDetail() async {
+  // Pagination states
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _currentOffset = 0;
+  final int _limit = 50;
+
+  Future<void> _fetchSurahDetail({bool isLoadMore = false}) async {
+    if (_isLoadingMore || (!_hasMore && isLoadMore)) return;
+
+    if (isLoadMore) {
+      setState(() => _isLoadingMore = true);
+    }
+
     try {
       final dbService = DatabaseService();
-      final ayahsTable = await dbService.getAyahsBySurah(widget.surahNumber);
+      final ayahsTable = await dbService.getAyahsBySurah(
+        widget.surahNumber,
+        limit: _limit,
+        offset: _currentOffset,
+      );
 
       if (ayahsTable.isNotEmpty) {
         final List<Ayah> mappedAyahs = ayahsTable
@@ -205,7 +255,6 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                 numberInSurah: t.numberInSurah,
                 text: t.text,
                 translation: t.textIndo,
-                // Construct Audio URL dynamically
                 audio:
                     'https://cdn.islamic.network/quran/audio/128/$_selectedQariIdentifier/${t.number}.mp3',
                 number: t.number,
@@ -214,35 +263,53 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                 page: t.page,
                 ruku: t.ruku,
                 hizbQuarter: t.hizbQuarter,
-                sajdah: t.sajda, // Fixed: sajda -> sajdah
-                tajweed: t.tajweed, // Map tajweed
+                sajdah: t.sajda,
+                tajweed: t.tajweed,
               ),
             )
             .toList();
 
         if (mounted) {
           setState(() {
-            _ayahs = mappedAyahs;
-            _ayahsFuture = Future.value(mappedAyahs);
+            if (isLoadMore) {
+              _ayahs.addAll(mappedAyahs);
+            } else {
+              _ayahs = mappedAyahs;
+              _ayahsFuture = Future.value(_ayahs);
+            }
+            _currentOffset += mappedAyahs.length;
+            _hasMore = mappedAyahs.length == _limit;
+            _isLoadingMore = false;
           });
         }
       } else {
-        // Fallback to API if DB is empty (shouldn't happen if check passed)
-        // Or just show empty/error
-        setState(() {
-          _ayahsFuture =
-              QuranService.getSurahDetail(
-                widget.surahNumber,
-                audioIdentifier: _selectedQariIdentifier,
-              ).then((value) {
-                _ayahs = value;
-                return value;
-              });
-        });
+        if (!isLoadMore) {
+          // Fallback to API if DB is empty
+          setState(() {
+            _ayahsFuture = QuranService.getSurahDetail(
+              widget.surahNumber,
+              audioIdentifier: _selectedQariIdentifier,
+            ).then((value) {
+              _ayahs = value;
+              _hasMore = false;
+              return value;
+            });
+          });
+        } else {
+          setState(() {
+            _hasMore = false;
+            _isLoadingMore = false;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error fetching from DB: $e');
+      if (mounted) setState(() => _isLoadingMore = false);
     }
+  }
+
+  void _loadMoreAyahs() {
+    _fetchSurahDetail(isLoadMore: true);
   }
 
   Future<void> _loadQaris() async {
@@ -268,7 +335,15 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     } else {
       if (mounted) setState(() => _playingVerse = index);
       try {
-        await _audioPlayer.play(UrlSource(audioUrl));
+        final ayahNumber = _ayahs[index].number;
+        final audioService = AudioDownloadService();
+        final localPath = await audioService.getLocalAudioPath(ayahNumber, _selectedQariIdentifier);
+
+        if (localPath != null) {
+          await _audioPlayer.play(DeviceFileSource(localPath));
+        } else {
+          await _audioPlayer.play(UrlSource(audioUrl));
+        }
       } catch (e) {
         debugPrint("Audio Play Error: $e");
         if (mounted) setState(() => _playingVerse = null);
@@ -296,6 +371,65 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
 
       // Initial Scroll
       _scrollToVerse(startIndex + 1);
+    }
+  }
+
+  bool _isDownloadingAudio = false;
+  double _downloadProgress = 0.0;
+
+  Future<void> _downloadAudio(BuildContext context) async {
+    if (_isDownloadingAudio) return;
+    if (_ayahs.isEmpty) return;
+
+    setState(() {
+      _isDownloadingAudio = true;
+      _downloadProgress = 0.0;
+    });
+
+    final audioService = AudioDownloadService();
+    
+    // We should show a snackbar or update UI directly. Let's use a snackbar for start
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Mengunduh audio... Harap tunggu')),
+    );
+
+    // Fetch all ayahs for this surah first if not fully loaded
+    // To ensure we can download all of them even if lazy loaded
+    final dbService = DatabaseService();
+    final allAyahsTable = await dbService.getAyahsBySurah(widget.surahNumber);
+    final List<Ayah> allAyahs = allAyahsTable.map((t) => Ayah(
+      numberInSurah: t.numberInSurah,
+      text: t.text,
+      audio: 'https://cdn.islamic.network/quran/audio/128/$_selectedQariIdentifier/${t.number}.mp3',
+      number: t.number,
+      juz: t.juz,
+      manzil: t.manzil,
+      page: t.page,
+      ruku: t.ruku,
+      hizbQuarter: t.hizbQuarter,
+      sajdah: t.sajda,
+    )).toList();
+
+    await audioService.downloadSurahAudio(
+      ayahs: allAyahs,
+      qariIdentifier: _selectedQariIdentifier,
+      onProgress: (progress) {
+        if (mounted) {
+          setState(() {
+            _downloadProgress = progress;
+          });
+        }
+      },
+    );
+
+    if (mounted) {
+      setState(() {
+        _isDownloadingAudio = false;
+        _downloadProgress = 1.0;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Audio berhasil diunduh!')),
+      );
     }
   }
 
@@ -962,23 +1096,39 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                               Center(
                                 child: Container(
                                   margin: const EdgeInsets.only(bottom: 16),
-                                  child: ElevatedButton.icon(
-                                    onPressed: _playAll,
-                                    icon: Icon(
-                                      _isPlayingAll
-                                          ? Icons.stop
-                                          : Icons.play_arrow,
-                                    ),
-                                    label: Text(
-                                      _isPlayingAll
-                                          ? 'Stop Info Audio'
-                                          : 'Putar Semua Ayat',
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primary,
-                                      foregroundColor: Colors.white,
-                                      shape: const StadiumBorder(),
-                                    ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      ElevatedButton.icon(
+                                        onPressed: _playAll,
+                                        icon: Icon(
+                                          _isPlayingAll
+                                              ? Icons.stop
+                                              : Icons.play_arrow,
+                                        ),
+                                        label: Text(
+                                          _isPlayingAll
+                                              ? 'Stop'
+                                              : 'Putar Semua',
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          foregroundColor: Colors.white,
+                                          shape: const StadiumBorder(),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      ElevatedButton.icon(
+                                        onPressed: () => _downloadAudio(context),
+                                        icon: const Icon(Icons.download),
+                                        label: const Text('Unduh Audio'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                                          foregroundColor: isDark ? Colors.white : Colors.black,
+                                          shape: const StadiumBorder(),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),

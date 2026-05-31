@@ -12,8 +12,10 @@
 - **Arah Kiblat**: Penunjuk arah kiblat presisi dengan sensor kompas.
 - **Tasbih Digital**: Hitung dzikir Anda dengan fitur target, getar, dan suara.
 - **Notifikasi Adzan**: Pengingat waktu sholat dengan suara adzan (Makkah, Madinah, dll).
+- **Kalkulator Zakat**: Hitung zakat maal, penghasilan, emas, dan fitrah dengan akurat.
+- **Jurnal Ibadah (Mutaba'ah Yaumiyah)**: Pantau dan catat target ibadah harian Anda beserta statistiknya.
+- **Notifikasi Puasa Sunnah**: Pengingat otomatis di malam hari sebelum jadwal puasa sunnah.
 - **Tema Gelap & Terang**: Tampilan nyaman di mata kapan saja.
-
 ## Teknologi
 
 - **Framework**: Flutter

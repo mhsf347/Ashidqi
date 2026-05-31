@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -29,6 +30,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _randomHadith;
   Map<String, dynamic>? _fastingInfo;
   Map<String, dynamic>? _randomQuran;
+  bool _locationFailed = false;
+
+  // Real-time countdown timer
+  Timer? _countdownTimer;
+  Duration _timeRemaining = Duration.zero;
 
   // Session state for donation dialog
   static bool _donationShown = false;
@@ -37,6 +43,23 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _initApp();
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startCountdownTimer() {
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_prayerTimes != null && mounted) {
+        setState(() {
+          _timeRemaining = _prayerTimes!.getTimeUntilNextPrayer();
+        });
+      }
+    });
   }
 
   Future<void> _initApp() async {
@@ -287,12 +310,26 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) {
       setState(() {
         _prayerTimes = prayerTimes;
+        // Detect if location fell back to default Jakarta
+        _locationFailed = (prayerTimes?.city == 'Lokasi Saya' || prayerTimes?.city == 'Lokasi GPS' || prayerTimes?.city.isEmpty == true);
+        if (prayerTimes != null) {
+          _timeRemaining = prayerTimes.getTimeUntilNextPrayer();
+        }
       });
       if (prayerTimes != null) {
         WidgetService.updateWidget(prayerTimes);
+        _startCountdownTimer();
       }
       _checkAndShowDonation();
     }
+  }
+
+  Future<void> _refreshAll() async {
+    await _loadPrayerTimes();
+    _loadRandomDoa();
+    _loadRandomHadith();
+    _loadRandomQuran();
+    _loadFastingInfo();
   }
 
   void _checkAndShowDonation() async {
@@ -383,52 +420,61 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: isDark
           ? const Color(0xFF10221b)
           : const Color(0xFFF8FCFB),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Header with Gradient
-            _buildHeader(context, isDark),
+      body: RefreshIndicator(
+        onRefresh: _refreshAll,
+        color: AppColors.primary,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              // Header with Gradient
+              _buildHeader(context, isDark),
 
-            // Content overlapping header
-            Transform.translate(
-              offset: const Offset(0, -64),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    // Next Prayer Card
-                    _buildNextPrayerCard(context, isDark)
-                        .animate()
-                        .fadeIn(duration: 400.ms)
-                        .slideY(begin: 0.1, end: 0),
+              // Content overlapping header
+              Transform.translate(
+                offset: const Offset(0, -64),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    children: [
+                      // Next Prayer Card
+                      _buildNextPrayerCard(context, isDark)
+                          .animate()
+                          .fadeIn(duration: 400.ms)
+                          .slideY(begin: 0.1, end: 0),
 
-                    const SizedBox(height: 24),
+                      // GPS Warning Banner
+                      if (_locationFailed)
+                        _buildLocationWarning(context, isDark),
 
-                    // Quick Actions
-                    _buildQuickActions(
-                      context,
-                      isDark,
-                    ).animate(delay: 100.ms).fadeIn(duration: 400.ms),
+                      const SizedBox(height: 24),
 
-                    const SizedBox(height: 24),
+                      // Quick Actions
+                      _buildQuickActions(
+                        context,
+                        isDark,
+                      ).animate(delay: 100.ms).fadeIn(duration: 400.ms),
 
-                    // Today's Highlight Section
-                    _buildHighlightSection(context, isDark),
+                      const SizedBox(height: 24),
 
-                    const SizedBox(height: 24),
+                      // Today's Highlight Section
+                      _buildHighlightSection(context, isDark),
 
-                    // Quote Card
-                    _buildQuoteCard(context, isDark)
-                        .animate(delay: 400.ms)
-                        .fadeIn(duration: 400.ms)
-                        .slideY(begin: 0.1, end: 0),
+                      const SizedBox(height: 24),
 
-                    const SizedBox(height: 100), // Space for bottom nav
-                  ],
+                      // Quote Card
+                      _buildQuoteCard(context, isDark)
+                          .animate(delay: 400.ms)
+                          .fadeIn(duration: 400.ms)
+                          .slideY(begin: 0.1, end: 0),
+
+                      const SizedBox(height: 100), // Space for bottom nav
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -593,12 +639,58 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildLocationWarning(BuildContext context, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.amber.withValues(alpha: isDark ? 0.15 : 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.amber.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.location_off, color: Colors.amber, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Menggunakan lokasi default. Aktifkan GPS untuk akurasi jadwal sholat.',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.amber.shade200 : Colors.amber.shade800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => Navigator.pushNamed(context, '/settings'),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Atur',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.amber.shade200 : Colors.amber.shade800,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNextPrayerCard(BuildContext context, bool isDark) {
     final nextPrayer = _prayerTimes?.getNextPrayer();
-    final timeRemaining = _prayerTimes?.getTimeUntilNextPrayer();
 
-    String formatDuration(Duration? d) {
-      if (d == null) return '--:--:--';
+    String formatDuration(Duration d) {
       final hours = d.inHours.toString().padLeft(2, '0');
       final minutes = (d.inMinutes % 60).toString().padLeft(2, '0');
       final seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
@@ -683,7 +775,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'PM',
+                            _getAmPm(nextPrayer?['time']),
                             style: TextStyle(
                               color: isDark
                                   ? Colors.grey.shade400
@@ -755,7 +847,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          formatDuration(timeRemaining),
+                          _timeRemaining.inSeconds > 0
+                              ? formatDuration(_timeRemaining)
+                              : '--:--:--',
                           style: TextStyle(
                             color: AppColors.primary,
                             fontSize: 12,
@@ -840,6 +934,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String _getAmPm(String? time) {
+    if (time == null) return '';
+    try {
+      final hour = int.parse(time.split(':')[0]);
+      return hour >= 12 ? 'PM' : 'AM';
+    } catch (_) {
+      return '';
+    }
+  }
+
   Widget _buildQuickActions(BuildContext context, bool isDark) {
     final actions = [
       {'icon': Icons.explore_outlined, 'label': 'Qibla', 'route': '/qibla'},
@@ -850,6 +954,8 @@ class _HomeScreenState extends State<HomeScreen> {
         'route': '/mosque-map',
       },
       {'icon': Icons.auto_stories_outlined, 'label': 'Doa', 'route': '/doa'},
+      {'icon': Icons.calculate_outlined, 'label': 'Zakat', 'route': '/zakat'},
+      {'icon': Icons.checklist_outlined, 'label': 'Jurnal', 'route': '/journal'},
     ];
 
     return SingleChildScrollView(

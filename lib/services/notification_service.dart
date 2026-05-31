@@ -34,23 +34,27 @@ class NotificationService {
           iOS: initializationSettingsDarwin,
         );
 
-    // v17: Positional argument
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    // v17+: Named argument
+    await flutterLocalNotificationsPlugin.initialize(settings: initializationSettings);
     await requestPermissions();
   }
 
   Future<void> requestPermissions() async {
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.requestNotificationsPermission();
+    try {
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.requestNotificationsPermission();
 
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin
-        >()
-        ?.requestPermissions(alert: true, badge: true, sound: true);
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
+    } catch (e) {
+      debugPrint("Permission request skipped in headless/background mode: $e");
+    }
   }
 
   Future<void> schedulePrayerNotification({
@@ -65,11 +69,11 @@ class NotificationService {
       if (scheduledTime.isBefore(now)) return;
 
       await flutterLocalNotificationsPlugin.zonedSchedule(
-        id,
-        title,
-        body,
-        tz.TZDateTime.from(scheduledTime, tz.local), // Positional
-        NotificationDetails(
+        id: id,
+        title: title,
+        body: body,
+        scheduledDate: tz.TZDateTime.from(scheduledTime, tz.local),
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             soundName != null
                 ? 'prayer_channel_$soundName'
@@ -85,10 +89,7 @@ class NotificationService {
           ),
           iOS: const DarwinNotificationDetails(),
         ),
-        // Named args for v17
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
       );
       debugPrint('Scheduled $title at $scheduledTime (ID: $id)');
     } catch (e) {
@@ -105,9 +106,9 @@ class NotificationService {
   }) async {
     final AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
-          'download_channel',
-          'Download Progress',
-          channelDescription: 'Menampilkan progress download',
+          'progress_channel',
+          'Progress Notifications',
+          channelDescription: 'Menampilkan progress unduhan',
           channelShowBadge: false,
           importance: Importance.low,
           priority: Priority.low,
@@ -115,26 +116,56 @@ class NotificationService {
           showProgress: true,
           maxProgress: maxProgress,
           progress: progress,
-          ongoing: true, // Prevent dismissal
-          autoCancel: false,
         );
     final NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
     );
-
     await flutterLocalNotificationsPlugin.show(
-      id,
-      title,
-      body,
-      platformChannelSpecifics,
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: platformChannelSpecifics,
     );
   }
 
   Future<void> cancelNotification(int id) async {
-    await flutterLocalNotificationsPlugin.cancel(id);
+    await flutterLocalNotificationsPlugin.cancel(id: id);
   }
 
   Future<void> cancelAllNotifications() async {
     await flutterLocalNotificationsPlugin.cancelAll();
+  }
+
+  Future<void> scheduleFastingReminder({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledTime,
+  }) async {
+    try {
+      final now = DateTime.now();
+      if (scheduledTime.isBefore(now)) return;
+
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        id: id,
+        title: title,
+        body: body,
+        scheduledDate: tz.TZDateTime.from(scheduledTime, tz.local),
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'fasting_channel',
+            'Pengingat Puasa Sunnah',
+            channelDescription: 'Notifikasi pengingat puasa sunnah esok hari',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+      debugPrint('Scheduled Fasting Reminder: $title at $scheduledTime');
+    } catch (e) {
+      debugPrint('Error scheduling fasting reminder: $e');
+    }
   }
 }

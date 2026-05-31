@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../core/theme/app_colors.dart';
 
 /// Custom Bottom Navigation Bar with glass morphism effect
@@ -73,9 +74,9 @@ class AppBottomNavBar extends StatelessWidget {
                   _buildNavItem(
                     context,
                     index: 4,
-                    icon: Icons.nightlight_outlined,
-                    activeIcon: Icons.nightlight,
-                    label: 'Puasa',
+                    icon: Icons.checklist_outlined,
+                    activeIcon: Icons.checklist,
+                    label: 'Jurnal',
                     isDark: isDark,
                   ),
                 ],
@@ -114,7 +115,7 @@ class AppBottomNavBar extends StatelessWidget {
                     ? AppColors.primary
                     : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
               ),
-            ),
+            ).animate(target: isSelected ? 1 : 0).scaleXY(begin: 1, end: 1.15, duration: 200.ms),
             const SizedBox(height: 4),
             Text(
               label,
@@ -126,6 +127,16 @@ class AppBottomNavBar extends StatelessWidget {
                     : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
               ),
             ),
+            if (isSelected)
+              Container(
+                margin: const EdgeInsets.only(top: 4),
+                width: 4,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+              ).animate().scale(duration: 200.ms, curve: Curves.easeOutBack),
           ],
         ),
       ),

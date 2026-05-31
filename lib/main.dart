@@ -7,6 +7,7 @@ import 'core/theme/app_theme.dart';
 import 'providers/prayer_settings_provider.dart';
 import 'providers/theme_provider.dart';
 import 'services/notification_service.dart';
+import 'services/background_service.dart';
 
 import 'widgets/app_bottom_nav_bar.dart';
 
@@ -23,6 +24,8 @@ import 'screens/hadith/hadith_screen.dart';
 import 'screens/fasting/fasting_calendar_screen.dart';
 import 'screens/doa/daily_doa_screen.dart';
 import 'screens/bookmarks/bookmark_list_screen.dart';
+import 'screens/zakat/zakat_calculator_screen.dart';
+import 'screens/journal/ibadah_journal_screen.dart';
 import 'screens/notification/adzan_notification_screen.dart';
 import 'screens/settings/donation_screen.dart';
 import 'screens/settings/license_screen.dart';
@@ -35,6 +38,9 @@ void main() async {
   // Initialize Notification Service (Fix LateInitializationError)
   await NotificationService().init();
 
+  // Initialize Background Service (Workmanager)
+  await BackgroundService.init();
+
   // Set preferred orientations
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -44,7 +50,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()..init()),
         ChangeNotifierProvider(create: (_) => PrayerSettingsProvider()..init()),
       ],
       child: const AshidqiApp(),
@@ -85,6 +91,8 @@ class AshidqiApp extends StatelessWidget {
         '/donation': (context) => const DonationScreen(),
         '/license': (context) => const LicenseScreen(),
         '/contributor': (context) => const ContributorScreen(),
+        '/zakat': (context) => const ZakatCalculatorScreen(),
+        '/journal': (context) => const IbadahJournalScreen(),
       },
     );
   }
@@ -106,7 +114,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     const PrayerTimesScreen(),
     const QuranListScreen(),
     const HadithScreen(),
-    const FastingCalendarScreen(),
+    const IbadahJournalScreen(), // Replaced Fasting with Journal
   ];
 
   @override
