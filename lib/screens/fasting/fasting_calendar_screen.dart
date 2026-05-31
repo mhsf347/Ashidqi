@@ -6,6 +6,8 @@ import 'package:hijri/hijri_calendar.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:provider/provider.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/notification_service.dart';
 
@@ -55,19 +57,23 @@ class _FastingCalendarScreenState extends State<FastingCalendarScreen> {
       if (_scheduledReminders.contains(dateKey)) {
         _scheduledReminders.remove(dateKey);
         NotificationService().cancelNotification(id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pengingat puasa dibatalkan')),
+        Fluttertoast.showToast(
+          msg: 'Pengingat puasa dibatalkan',
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
         );
       } else {
         _scheduledReminders.add(dateKey);
         NotificationService().scheduleFastingReminder(
           id: id,
-          title: 'Pengingat Puasa Besok',
-          body: 'Jangan lupa sahur untuk $fastingName besok',
+          title: 'Puasa Sunnah Besok',
+          body: 'Besok adalah hari $fastingName. Jangan lupa niat puasa!',
           scheduledTime: date,
         );
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pengingat puasa berhasil diatur')),
+        Fluttertoast.showToast(
+          msg: 'Pengingat puasa berhasil diatur',
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
         );
       }
     });
